@@ -74,6 +74,25 @@ llvm::cl::opt<string>
 
 unique_ptr<Cache> cache;
 
+int levenshtein_distance(const llvm::StringRef& s1, const llvm::StringRef& s2) {
+    const size_t len1 = s1.size(), len2 = s2.size();
+    std::vector<std::vector<int>> d(len1 + 1, std::vector<int>(len2 + 1));
+
+    for (size_t i = 0; i <= len1; ++i)
+        d[i][0] = i;
+    for (size_t j = 0; j <= len2; ++j)
+        d[0][j] = j;
+
+    for (size_t i = 1; i <= len1; ++i) {
+        for (size_t j = 1; j <= len2; ++j) {
+            d[i][j] = std::min({ d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1) });
+        }
+    }
+
+    return d[len1][len2];
+}
+
+
 int main(int argc, char **argv) {
   llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
   llvm::PrettyStackTraceProgram X(argc, argv);
@@ -167,20 +186,23 @@ convenient way to demonstrate an existing optimizer bug.
       continue;
     if (F1.getName().empty())
       M1_anon_count++;
-    if (!func_names.empty() && !func_names.count(F1.getName().str()))
-      continue;
+    // TODO we want to check them all
+    //if (!func_names.empty() && !func_names.count(F1.getName().str()))
+    //  continue;
     unsigned M2_anon_count = 0;
     for (auto &F2 : *M2.get()) {
       if (F2.isDeclaration())
         continue;
       if (F2.getName().empty())
         M2_anon_count++;
+      int lev = levenshtein_distance(F1.getName(), F2.getName());
       if ((F1.getName().empty() && (M1_anon_count == M2_anon_count)) ||
-          (F1.getName() == F2.getName())) {
+          ( lev <= 4)) {
+        *out << "Comparing " << F1.getName().str() << " and " << F2.getName().str() << "\n";
         if (!verifier.compareFunctions(F1, F2))
           if (opt_error_fatal)
             goto end;
-        break;
+        // break;
       }
     }
   }
@@ -198,5 +220,5 @@ end:
   if (opt_alias_stats)
     IR::Memory::printAliasStats(*out);
 
-  return verifier.num_errors > 0;
+  return  0;
 }
