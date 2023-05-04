@@ -181,7 +181,6 @@ convenient way to demonstrate an existing optimizer bug.
           "  " << verifier.num_failed  << " failed-to-prove transformations\n"
           "  " << verifier.num_errors << " Alive2 errors\n";
 
-end:
   if (opt_smt_stats)
     smt::solver_print_stats(*out);
 
