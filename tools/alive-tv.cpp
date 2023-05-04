@@ -170,9 +170,9 @@ convenient way to demonstrate an existing optimizer bug.
    if (SRC && TGT) {
       verifier.compareFunctions(*SRC, *TGT);
   } else {
-
-    *out << "Functions could not be found in the source neither in the target\n";
-    return -1;
+    verifier.num_errors++;
+    *out << "ERROR: Functions could not be found in the source neither in the target\n";
+    //return -1;
   }
 
   *out << "Summary:\n"
