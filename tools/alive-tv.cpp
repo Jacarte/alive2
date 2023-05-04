@@ -50,15 +50,17 @@ llvm::cl::opt<string> opt_file1(llvm::cl::Positional,
 
 llvm::cl::opt<string> opt_file2(llvm::cl::Positional,
   llvm::cl::desc("[second_bitcode_file]"),
-  llvm::cl::Optional, llvm::cl::value_desc("filename"),
+  llvm::cl::Required, llvm::cl::value_desc("filename"),
   llvm::cl::cat(alive_cmdargs));
 
 llvm::cl::opt<std::string> opt_src_fn(LLVM_ARGS_PREFIX "src-fn",
   llvm::cl::desc("Name of src function (without @)"),
+  llvm::cl::Required, 
   llvm::cl::cat(alive_cmdargs), llvm::cl::init("src"));
 
 llvm::cl::opt<std::string> opt_tgt_fn(LLVM_ARGS_PREFIX"tgt-fn",
   llvm::cl::desc("Name of tgt function (without @)"),
+  llvm::cl::Required, 
   llvm::cl::cat(alive_cmdargs), llvm::cl::init("tgt"));
 
 llvm::cl::opt<string>
@@ -99,8 +101,7 @@ int main(int argc, char **argv) {
   llvm::EnableDebugBuffering = true;
   llvm::llvm_shutdown_obj llvm_shutdown; // Call llvm_shutdown() on exit.
   llvm::LLVMContext Context;
-  unsigned M1_anon_count = 0;
-
+  
   std::string Usage =
       R"EOF(Alive2 stand-alone translation validator:
 version )EOF";
@@ -152,59 +153,26 @@ convenient way to demonstrate an existing optimizer bug.
   verifier.bidirectional = opt_bidirectional;
 
   unique_ptr<llvm::Module> M2;
-  if (opt_file2.empty()) {
-    auto SRC = findFunction(*M1, opt_src_fn);
-    auto TGT = findFunction(*M1, opt_tgt_fn);
-    if (SRC && TGT) {
-      verifier.compareFunctions(*SRC, *TGT);
-      goto end;
-    } else {
-      M2 = CloneModule(*M1);
-      auto err = optimize_module(M2.get(), optPass);
-      if (!err.empty()) {
-        *out << "Error parsing list of LLVM passes: " << err << '\n';
-        return -1;
-      }
-    }
-  } else {
-    M2 = openInputFile(Context, opt_file2);
+  M2 = openInputFile(Context, opt_file2);
     if (!M2.get()) {
       *out << "Could not read bitcode from '" << opt_file2 << "'\n";
       return -1;
     }
-  }
 
   if (M1.get()->getTargetTriple() != M2.get()->getTargetTriple()) {
     *out << "Modules have different target triples\n";
     return -1;
   }
 
-  // FIXME: quadratic, may not be suitable for very large modules
-  // emitted by opt-fuzz
-  for (auto &F1 : *M1.get()) {
-    if (F1.isDeclaration())
-      continue;
-    if (F1.getName().empty())
-      M1_anon_count++;
-    // TODO we want to check them all
-    //if (!func_names.empty() && !func_names.count(F1.getName().str()))
-    //  continue;
-    unsigned M2_anon_count = 0;
-    for (auto &F2 : *M2.get()) {
-      if (F2.isDeclaration())
-        continue;
-      if (F2.getName().empty())
-        M2_anon_count++;
-      int lev = levenshtein_distance(F1.getName(), F2.getName());
-      if ((F1.getName().empty() && (M1_anon_count == M2_anon_count)) ||
-          ( lev <= 4)) {
-        *out << "Comparing " << F1.getName().str() << " and " << F2.getName().str() << "\n";
-        if (!verifier.compareFunctions(F1, F2))
-          if (opt_error_fatal)
-            goto end;
-        // break;
-      }
-    }
+  auto SRC = findFunction(*M1, opt_src_fn);
+  auto TGT = findFunction(*M2, opt_tgt_fn);
+
+   if (SRC && TGT) {
+      verifier.compareFunctions(*SRC, *TGT);
+  } else {
+
+    *out << "Functions could not be found in the source neither in the target\n";
+    return -1;
   }
 
   *out << "Summary:\n"
